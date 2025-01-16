@@ -1,4 +1,5 @@
 import type { ProtocolWithReturn } from 'webext-bridge'
+import type { AITagConfig, Tag } from '@web-archive/shared/types'
 import type { SeriableSingleFileTask } from './background/processor'
 import type { LoadStage, SingleFileSetting } from '~/utils/singleFile'
 
@@ -18,6 +19,8 @@ declare module 'webext-bridge' {
         href: string
         folderId: string
         screenshot?: string
+        bindTags: string[]
+        isShowcased: boolean
       }
     }, {}>
     'get-page-task-list': ProtocolWithReturn<{}, { taskList: Array<SeriableSingleFileTask> }>
@@ -30,9 +33,13 @@ declare module 'webext-bridge' {
     'get-token': ProtocolWithReturn<{}, { token: string }>
     'set-token': ProtocolWithReturn<{ token: string }, { success: boolean }>
     'get-all-folders': ProtocolWithReturn<{}, { folders: Array<{ id: number, name: string }> }>
+    'create-folder': ProtocolWithReturn<{ name: string }, { name: string, id: number } | undefined>
+    'get-all-tags': ProtocolWithReturn<{}, { tags: Array<Tag> }>
     'scrape-page-progress': ProtocolWithReturn<{ stage: LoadStage }, {}>
     'scrape-page-progress-to-popup': ProtocolWithReturn<{ stage: LoadStage }, {}>
     'scrape-page-data': ProtocolWithReturn<SingleFileSetting, { content: string, title: string, href: string, pageDesc: string }>
     'scrape-available': ProtocolWithReturn<{ tabId: number }, { available: boolean }>
+    'get-ai-tag-config': ProtocolWithReturn<{}, { aiTagConfig: AITagConfig }>
+    'generate-tag': ProtocolWithReturn<GenerateTagProps, { tags: string[] }>
   }
 }

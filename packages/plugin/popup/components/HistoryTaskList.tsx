@@ -5,6 +5,7 @@ import { ArrowLeft, Check, ClockAlert, Eraser, LoaderCircle } from 'lucide-react
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@web-archive/shared/components/tooltip'
 import Browser from 'webextension-polyfill'
 import { Button } from '@web-archive/shared/components/button'
+import { useTranslation } from 'react-i18next'
 import type { PageType } from '../PopupPage'
 import type { SeriableSingleFileTask } from '~/background/processor'
 
@@ -12,7 +13,7 @@ function HistoryTaskList({ setActivePage }: { setActivePage: (tab: PageType) => 
   const { data: taskList } = useRequest(
     async () => {
       const { taskList } = await sendMessage('get-page-task-list', {})
-      return taskList
+      return taskList.reverse()
     },
     {
       pollingInterval: 1000,
@@ -20,26 +21,28 @@ function HistoryTaskList({ setActivePage }: { setActivePage: (tab: PageType) => 
   )
 
   return (
-    <div className="w-64 space-y-1.5 p-4">
+    <div className="w-80 space-y-2 p-4">
       <div className="h-6 mb-2 flex space-x-3 items-center justify-between">
         <ArrowLeft
           className="cursor-pointer"
-          size={16}
           onClick={() => { setActivePage('home') }}
         >
         </ArrowLeft>
         <ClearHistoryTaskListButton></ClearHistoryTaskListButton>
       </div>
-      <ScrollArea className="max-h-64">
-        {taskList && taskList.map(task => (
-          <TaskListItem key={task.uuid} task={task}></TaskListItem>
-        ))}
+      <ScrollArea>
+        <div className="max-h-96 space-y-2">
+          {taskList && taskList.map(task => (
+            <TaskListItem key={task.uuid} task={task}></TaskListItem>
+          ))}
+        </div>
       </ScrollArea>
     </div>
   )
 }
 
 function ClearHistoryTaskListButton() {
+  const { t } = useTranslation()
   function handleClick() {
     sendMessage('clear-finished-task-list', {})
   }
@@ -53,11 +56,11 @@ function ClearHistoryTaskListButton() {
             className="p-1 h-6"
             onClick={handleClick}
           >
-            <Eraser size={14} />
+            <Eraser size={20} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={20}>
-          Clear finished history task list
+          {t('clear-finished-task-list')}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -71,16 +74,40 @@ function TaskListItem({ task }: { task: SeriableSingleFileTask }) {
     })
   }
 
+  const bgColor = task.status === 'done' ? 'bg-primary/20' : task.status === 'failed' ? 'bg-destructive/20' : 'bg-secondary'
+
+  return (
+    <div className={`h-14 w-full space-y-0.5 rounded p-2 ${bgColor}`}>
+      <div className="font-bold cursor-pointer overflow-hidden text-ellipsis text-nowrap underline" onClick={openOriginalPage}>{task.title}</div>
+      <TaskDetailText task={task}></TaskDetailText>
+    </div>
+  )
+}
+
+function TaskDetailText({ task }: { task: SeriableSingleFileTask }) {
+  const { t } = useTranslation()
   const taskRunningTime = Date.now() - task.startTimeStamp
   const shouldShowRunningTimeText = task.status !== 'done' && task.status !== 'failed'
   const runningTimeText = shouldShowRunningTimeText ? `(${(taskRunningTime / 1000).toFixed(0)}s)` : ''
 
+  const statusText = t(`task-${task.status}`)
+  const errorText = task.errorMessage ? `${task.errorMessage}` : 'Uknown error'
+
+  let renderText = statusText
+  if (task.status === 'failed') {
+    renderText += `: ${errorText}`
+  }
+
   return (
-    <div className="flex justify-between items-center h-6 w-full space-x-1">
-      <div className="font-bold cursor-pointer overflow-hidden text-ellipsis text-nowrap" onClick={openOriginalPage}>{task.title}</div>
-      <div>{runningTimeText}</div>
-      <div className="flex mt-0.5">
-        <TaskStatusIcon status={task.status} errorMessage={task.errorMessage}></TaskStatusIcon>
+    <div className="flex justify-between items-center">
+      <div className="flex-1 overflow-hidden text-ellipsis text-nowrap">
+        {renderText}
+      </div>
+      <div className="flex">
+        <div className="text-gray-500 text-xs">{runningTimeText}</div>
+        <div className="mt-0.5">
+          <TaskStatusIcon status={task.status} errorMessage={task.errorMessage}></TaskStatusIcon>
+        </div>
       </div>
     </div>
   )

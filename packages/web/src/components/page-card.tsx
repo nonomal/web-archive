@@ -1,26 +1,32 @@
 import type { Page } from '@web-archive/shared/types'
-import React, { memo, useState } from 'react'
+import React, { memo, useContext, useState } from 'react'
 import { useRequest } from 'ahooks'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@web-archive/shared/components/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@web-archive/shared/components/card'
 import { Button } from '@web-archive/shared/components/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@web-archive/shared/components/tooltip'
 import { ExternalLink, Eye, EyeOff, SquarePen, Trash } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { BadgeSpan } from '@web-archive/shared/components/badge'
+import { TooltipPortal } from '@radix-ui/react-tooltip'
+import { useTranslation } from 'react-i18next'
 import ScreenshotView from './screenshot-view'
-import { useNavigate } from '~/router'
 import { updatePageShowcase } from '~/data/page'
 import CardEditDialog from '~/components/card-edit-dialog'
+import TagContext from '~/store/tag'
+import { Link } from '~/router'
 
 function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) => void }) {
-  const navigate = useNavigate()
+  const { t } = useTranslation()
+  const { tagCache, refreshTagCache } = useContext(TagContext)
+  const bindTags = tagCache?.filter(tag => tag.pageIds.includes(page.id)) ?? []
+  const tagBadgeList = bindTags.map((tag) => {
+    return (<BadgeSpan key={tag.id} variant="outline" className="select-none">{tag.name}</BadgeSpan>)
+  })
 
   const location = useLocation()
   const isShowcased = location.pathname.startsWith('/showcase')
-
-  const handleClickPageCard = (page: Page) => {
-    navigate(isShowcased ? '/showcase/page/:slug' : '/page/:slug', { params: { slug: String(page.id) } })
-  }
+  const redirectTo = isShowcased ? `/showcase/page/:slug` : `/page/:slug`
 
   const handleClickPageUrl = (e: React.MouseEvent, page: Page) => {
     e.stopPropagation()
@@ -29,24 +35,29 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
 
   const handleDeletePage = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (window.confirm('Are you sure you want to delete this page?')) {
+    if (window.confirm(t('delete-this-page-confirm'))) {
       onPageDelete?.(page)
     }
   }
 
-  const [showcaseSate, setShowcaseState] = useState(page.isShowcased)
+  const [showcaseState, setShowcaseState] = useState(page.isShowcased)
   const { run: updateShowcase } = useRequest(
     updatePageShowcase,
     {
       manual: true,
       onSuccess() {
-        toast.success('Success')
-        setShowcaseState(showcaseSate === 1 ? 0 : 1)
+        toast.success(t('success'))
+        setShowcaseState(showcaseState === 1 ? 0 : 1)
       },
     },
   )
 
   const [openCardEditDialog, setOpenCardEditDialog] = useState(false)
+  const handleEditPage = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await refreshTagCache()
+    setOpenCardEditDialog(true)
+  }
 
   return (
     <div>
@@ -55,23 +66,29 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
           <CardEditDialog open={openCardEditDialog} onOpenChange={setOpenCardEditDialog} pageId={page.id} />
         )
       }
+
       <Card
         key={page.id}
-        onClick={() => handleClickPageCard(page)}
-        className="cursor-pointer hover:shadow-lg transition-shadow flex flex-col relative group"
+        className="cursor-pointer hover:shadow-lg transition-shadow flex flex-col relative group overflow-hidden"
       >
-        <CardHeader>
-          <CardTitle className="leading-8 text-lg line-clamp-2">{page.title}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1">
-          <ScreenshotView
-            screenshotId={page.screenshotId}
-            className="w-full mb-2"
-            loadingClassName="w-full h-48"
-          >
-          </ScreenshotView>
-          <p className="h-auto text-sm text-gray-600 dark:text-gray-400 line-clamp-3">{page.pageDesc}</p>
-        </CardContent>
+        <Link to={redirectTo} params={{ slug: page.id.toString() }}>
+          <CardHeader>
+            <CardTitle className="leading-8 text-lg line-clamp-2">{page.title}</CardTitle>
+            <CardDescription className="space-x-1">
+              {tagBadgeList}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <ScreenshotView
+              screenshotId={page.screenshotId}
+              className="w-full mb-2"
+              loadingClassName="w-full h-48"
+            >
+            </ScreenshotView>
+            <p className="h-auto text-sm text-gray-600 dark:text-gray-400 line-clamp-3">{page.pageDesc}</p>
+          </CardContent>
+        </Link>
+
         <CardFooter className="flex space-x-2 justify-end w-full backdrop-blur-sm py-4 absolute bottom-0 group-hover:opacity-100 sm:opacity-0 transition-opacity">
           {
             !isShowcased && (
@@ -81,16 +98,13 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setOpenCardEditDialog(true)
-                      }}
+                      onClick={handleEditPage}
                     >
                       <SquarePen className="w-5 h-5" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Edit page
+                    {t('edit-page')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -104,9 +118,11 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
                   <ExternalLink className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                Open original link
-              </TooltipContent>
+              <TooltipPortal>
+                <TooltipContent>
+                  {t('open-original-link')}
+                </TooltipContent>
+              </TooltipPortal>
             </Tooltip>
           </TooltipProvider>
 
@@ -121,7 +137,7 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      Delete this page
+                      {t('delete-page')}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -133,19 +149,24 @@ function Comp({ page, onPageDelete }: { page: Page, onPageDelete?: (page: Page) 
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          updateShowcase({ id: page.id, isShowcased: showcaseSate === 1 ? 0 : 1 })
+                          updateShowcase({ id: page.id, isShowcased: showcaseState === 1 ? 0 : 1 })
                         }}
                       >
                         {
-                          showcaseSate === 1 ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />
+                          showcaseState === 1 ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />
                         }
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      {
-                        showcaseSate === 1 ? 'Remove from showcase' : 'Show in showcase'
-                      }
-                    </TooltipContent>
+                    <TooltipPortal>
+                      <TooltipContent>
+                        {
+                          showcaseState === 1
+                            ? t('remove-from-showcase')
+                            : t('add-to-showcase')
+                        }
+                      </TooltipContent>
+                    </TooltipPortal>
+
                   </Tooltip>
                 </TooltipProvider>
               </>
